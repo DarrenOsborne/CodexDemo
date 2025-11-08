@@ -14,7 +14,7 @@ The only external dependency is `pygame`, which is listed in `requirements.txt`.
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/your-org/codex-demo-snake.git
+   git clone https://github.com/DarrenOsborne/CodexDemo.git
    cd codex-demo-snake
    ```
 
