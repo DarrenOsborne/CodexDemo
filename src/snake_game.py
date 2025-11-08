@@ -1,0 +1,131 @@
+"""Entry point for running the simple snake game."""
+
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass
+from typing import Tuple
+
+import pygame
+
+from game_objects import Food, Snake
+
+
+@dataclass
+class GameConfig:
+    grid_width: int = 20
+    grid_height: int = 20
+    block_size: int = 20
+    fps: int = 10
+
+    @property
+    def screen_size(self) -> Tuple[int, int]:
+        return (self.grid_width * self.block_size, self.grid_height * self.block_size)
+
+
+class SnakeGame:
+    """Encapsulates the main game loop and rendering."""
+
+    def __init__(self, config: GameConfig | None = None) -> None:
+        self.config = config or GameConfig()
+        self.screen: pygame.Surface | None = None
+        self.clock: pygame.time.Clock | None = None
+        self.snake: Snake | None = None
+        self.food: Food | None = None
+        self.score = 0
+
+    def reset(self) -> None:
+        start_position = [
+            (self.config.grid_width // 2 - 1, self.config.grid_height // 2),
+            (self.config.grid_width // 2, self.config.grid_height // 2),
+        ]
+        self.snake = Snake(start=start_position)
+        self.food = self._spawn_food()
+        self.score = 0
+
+    def _spawn_food(self) -> Food:
+        assert self.snake is not None
+        while True:
+            position = (
+                random.randint(0, self.config.grid_width - 1),
+                random.randint(0, self.config.grid_height - 1),
+            )
+            if position not in self.snake.body:
+                return Food(position)
+
+    def run(self) -> None:
+        pygame.init()
+        pygame.display.set_caption("Codex Demo Snake")
+        self.screen = pygame.display.set_mode(self.config.screen_size)
+        self.clock = pygame.time.Clock()
+        self.reset()
+
+        running = True
+        while running:
+            assert self.clock is not None and self.snake is not None and self.food is not None
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN:
+                    self._handle_key(event.key)
+
+            self._update_game_state()
+            self._draw()
+            self.clock.tick(self.config.fps)
+
+        pygame.quit()
+
+    def _handle_key(self, key: int) -> None:
+        assert self.snake is not None
+        if key == pygame.K_UP:
+            self.snake.set_direction((0, -1))
+        elif key == pygame.K_DOWN:
+            self.snake.set_direction((0, 1))
+        elif key == pygame.K_LEFT:
+            self.snake.set_direction((-1, 0))
+        elif key == pygame.K_RIGHT:
+            self.snake.set_direction((1, 0))
+
+    def _update_game_state(self) -> None:
+        assert self.snake is not None and self.food is not None
+        next_position = self.snake.next_head_position()
+        if self._is_out_of_bounds(next_position):
+            self.reset()
+            return
+
+        grow = next_position == self.food.position
+        self.snake.move(grow=grow)
+
+        if self.snake.hits_self():
+            self.reset()
+            return
+
+        if grow:
+            self.score += 1
+            self.food = self._spawn_food()
+
+    def _is_out_of_bounds(self, position: Tuple[int, int]) -> bool:
+        x, y = position
+        return not (0 <= x < self.config.grid_width and 0 <= y < self.config.grid_height)
+
+    def _draw(self) -> None:
+        assert self.screen is not None and self.snake is not None and self.food is not None
+        self.screen.fill((30, 30, 30))
+        self.food.draw(self.screen, self.config.block_size)
+        self.snake.draw(self.screen, self.config.block_size)
+        self._draw_score()
+        pygame.display.flip()
+
+    def _draw_score(self) -> None:
+        assert self.screen is not None
+        font = pygame.font.SysFont("arial", 18)
+        text = font.render(f"Score: {self.score}", True, (220, 220, 220))
+        self.screen.blit(text, (5, 5))
+
+
+def main() -> None:
+    SnakeGame().run()
+
+
+if __name__ == "__main__":
+    main()
