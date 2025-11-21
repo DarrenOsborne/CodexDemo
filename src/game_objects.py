@@ -20,13 +20,14 @@ class Food:
     color: Tuple[int, int, int] = (200, 30, 30)
 
     def draw(self, surface: pygame.Surface, block_size: int) -> None:
+        margin = block_size * 0.2
         rect = pygame.Rect(
-            self.position[0] * block_size,
-            self.position[1] * block_size,
-            block_size,
-            block_size,
+            self.position[0] * block_size + margin,
+            self.position[1] * block_size + margin,
+            block_size - 2 * margin,
+            block_size - 2 * margin,
         )
-        pygame.draw.rect(surface, self.color, rect)
+        pygame.draw.ellipse(surface, self.color, rect)
 
 
 class Snake:
@@ -74,7 +75,83 @@ class Snake:
         head = self.head()
         return head in list(self.body)[:-1]
 
-    def draw(self, surface: pygame.Surface, block_size: int) -> None:
-        for x, y in self.body:
-            rect = pygame.Rect(x * block_size, y * block_size, block_size, block_size)
-            pygame.draw.rect(surface, self.color, rect)
+    def draw(
+        self,
+        surface: pygame.Surface,
+        block_size: int,
+        progress: float,
+        grow: bool,
+    ) -> None:
+        if not self.body:
+            return
+
+        progress = max(0.0, min(progress, 1.0))
+        margin = block_size * 0.15
+        corner_radius = int(block_size * 0.3)
+
+        for start, target, is_head in self._animation_segments(grow):
+            interp_x = start[0] + (target[0] - start[0]) * progress
+            interp_y = start[1] + (target[1] - start[1]) * progress
+            pixel_x = interp_x * block_size + margin
+            pixel_y = interp_y * block_size + margin
+            size = block_size - 2 * margin
+            rect = pygame.Rect(pixel_x, pixel_y, size, size)
+
+            if is_head:
+                self._draw_head(surface, rect)
+            else:
+                pygame.draw.rect(surface, self.color, rect, border_radius=corner_radius)
+
+    def _draw_head(self, surface: pygame.Surface, rect: pygame.Rect) -> None:
+        pygame.draw.ellipse(surface, self.color, rect)
+
+        center = rect.center
+        radius = rect.width / 2
+        dir_x, dir_y = self.direction
+        if dir_x == dir_y == 0:
+            return
+
+        nose_offset = radius * 0.9
+        perp_offset = radius * 0.5
+
+        # Calculate triangle points for the head's direction indicator.
+        tip = (center[0] + dir_x * nose_offset, center[1] + dir_y * nose_offset)
+        if dir_x != 0:
+            perp = (0, 1)
+        else:
+            perp = (1, 0)
+        left = (
+            center[0] - perp[0] * perp_offset + dir_x * radius * 0.4,
+            center[1] - perp[1] * perp_offset + dir_y * radius * 0.4,
+        )
+        right = (
+            center[0] + perp[0] * perp_offset + dir_x * radius * 0.4,
+            center[1] + perp[1] * perp_offset + dir_y * radius * 0.4,
+        )
+        pygame.draw.polygon(surface, (20, 20, 20), [tip, left, right])
+
+    def _animation_segments(self, grow: bool) -> Tuple[Tuple[Vector2D, Vector2D, bool], ...]:
+        segments = list(self.body)
+        if not segments:
+            return tuple()
+
+        animation: list[Tuple[Vector2D, Vector2D, bool]] = []
+
+        if not grow:
+            last_index = len(segments) - 1
+            for i, start in enumerate(segments):
+                if i < last_index:
+                    target = segments[i + 1]
+                    is_head = False
+                else:
+                    target = self.next_head_position()
+                    is_head = True
+                animation.append((start, target, is_head))
+            return tuple(animation)
+
+        # When growing, existing segments stay in place while a new head emerges.
+        for i, start in enumerate(segments):
+            animation.append((start, start, False))
+
+        animation.append((segments[-1], self.next_head_position(), True))
+        return tuple(animation)
